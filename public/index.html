@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clef Playground</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #fff; --text: #1b1b1b; --muted: #6b6b6b; --line: #e3e3df;
+    --accent: #f38020; --accent2: #2c7be5; --good: #1a9e5c; --code: #f1f1ee;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111213; --panel: #1a1b1d; --text: #ececec; --muted: #9a9a9a; --line: #2c2d30;
+      --accent: #f6913a; --accent2: #5b9bf0; --good: #3cc47f; --code: #222326; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 24px 24px 8px; max-width: 1280px; margin: 0 auto; }
+  h1 { margin: 0; font-size: 24px; }
+  h1 span { color: var(--accent); }
+  header p { margin: 4px 0 0; color: var(--muted); }
+  main { max-width: 1280px; margin: 0 auto; padding: 16px 24px 48px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 20px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 16px; } header { padding: 16px 16px 0; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  label { display: block; font-weight: 600; font-size: 13px; margin: 14px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  label:first-child { margin-top: 0; }
+  textarea, select { width: 100%; background: var(--code); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font: 13px/1.45 ui-monospace, Menlo, monospace; }
+  textarea#state { font-family: inherit; font-size: 15px; min-height: 110px; }
+  textarea#questions { min-height: 300px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+  .presets { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 999px; padding: 5px 12px; cursor: pointer; font-size: 13px; }
+  .chip.on { border-color: var(--accent); color: var(--accent); }
+  .examples { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .examples button { font-size: 12px; padding: 3px 9px; }
+  button.run { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 10px 20px; font-weight: 600; cursor: pointer; font-size: 15px; }
+  button.run:disabled { opacity: .6; cursor: wait; }
+  .check { display: flex; gap: 6px; align-items: center; font-size: 14px; }
+  .results { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px) { .results { grid-template-columns: 1fr; } }
+  .model h2 { margin: 0; font-size: 17px; display: flex; justify-content: space-between; align-items: baseline; }
+  .ms { font: 600 13px ui-monospace, Menlo, monospace; color: var(--good); }
+  .sub { color: var(--muted); font-size: 12px; }
+  .q { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .q h3 { margin: 0 0 6px; font-size: 14px; display: flex; justify-content: space-between; gap: 8px; }
+  .q h3 .ans { color: var(--accent); font-weight: 700; }
+  .bar { display: grid; grid-template-columns: 96px 1fr 48px; gap: 8px; align-items: center; font-size: 12.5px; margin: 3px 0; }
+  .bar .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .track { background: var(--code); border-radius: 4px; height: 12px; overflow: hidden; }
+  .fill { height: 100%; background: var(--accent2); border-radius: 4px; transition: width .5s ease; }
+  .fill.top { background: var(--accent); }
+  .pct { text-align: right; font-family: ui-monospace, Menlo, monospace; }
+  .action { margin-top: 14px; padding: 10px 12px; border-radius: 8px; background: var(--code); font-size: 13.5px; }
+  .action b { color: var(--accent); }
+  .err { color: #d33; white-space: pre-wrap; font-size: 13px; }
+  .empty { color: var(--muted); text-align: center; padding: 60px 10px; }
+  .drop { border: 1.5px dashed var(--line); border-radius: 8px; padding: 12px; text-align: center; color: var(--muted); font-size: 13px; cursor: pointer; }
+  .drop.over { border-color: var(--accent); color: var(--accent); }
+  .thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .thumb { position: relative; width: 84px; height: 84px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb button { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: rgba(0,0,0,.65); color: #fff; cursor: pointer; font-size: 13px; line-height: 22px; padding: 0; }
+  .thumb span { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,.55); color: #fff; font-size: 10px; padding: 1px 4px; }
+  details { margin-top: 14px; } summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  pre { background: var(--code); padding: 10px; border-radius: 8px; overflow: auto; font-size: 12px; max-height: 320px; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span>Clef</span> decision model playground</h1>
+  <p class="sub" id="spend">Session spend: $0.000000 · 0 requests</p>
+  <p>Give it some text and a set of typed questions. It returns calibrated probabilities instead of generated text, so your code can branch on them directly.</p>
+</header>
+<main>
+  <section class="panel">
+    <label>Scenario</label>
+    <div class="presets" id="presets"></div>
+
+    <label for="state">State (the input to evaluate)</label>
+    <textarea id="state"></textarea>
+    <div class="examples" id="examples"></div>
+
+    <label>Images (optional, up to 4, placed before the state)</label>
+    <div class="drop" id="drop" tabindex="0">Drop, paste, or <u>choose</u> PNG / JPEG / WebP images
+      <input type="file" id="file" accept="image/png,image/jpeg,image/webp" multiple hidden></div>
+    <div class="thumbs" id="thumbs"></div>
+
+    <label for="questions">Questions (JSON schema)</label>
+    <textarea id="questions" spellcheck="false"></textarea>
+
+    <div class="row">
+      <button class="run" id="run">Decide</button>
+      <span class="check"><input type="checkbox" id="m-clef" checked><label for="m-clef" style="all:unset">clef</label></span>
+      <span class="check"><input type="checkbox" id="m-flash" checked><label for="m-flash" style="all:unset">clef-flash</label></span>
+      <span class="sub">⌘/Ctrl + Enter</span>
+    </div>
+  </section>
+
+  <section>
+    <div class="results" id="results"><div class="panel empty" style="grid-column:1/-1">Pick a scenario and press <b>Decide</b>.</div></div>
+    <details class="panel" id="rawWrap" hidden><summary>Raw JSON response</summary><pre id="raw"></pre></details>
+  </section>
+</main>
+
+<script>
+const PRESETS = {
+  "Support triage": {
+    examples: [
+      "Checkout has been failing for every customer for the last hour.",
+      "Hi! Could you tell me what's included in the Pro plan versus Business?",
+      "I was charged twice for my October invoice, please refund the duplicate.",
+      "The dashboard font looks a bit small on my laptop, not a big deal.",
+    ],
+    questions: {
+      urgent: { type: "noul", instructions: "Is this support request urgent?" },
+      team: { type: "choice", instructions: "Which team should handle this request?",
+        criteria: { billing: "Payments, invoices, and refunds", technical: "Outages, errors, and configuration", sales: "Plans and upgrades" } },
+      severity: { type: "score", instructions: "How severe is the customer impact?", criteria: ["No impact", "Minor", "Major", "Critical"] },
+    },
+    action: (a) => {
+      const team = a.team?.choice, sev = a.severity?.score ?? 0, urgent = a.urgent?.noul ?? 0;
+      if (a.team?.confidence < 0.3) return `Confidence is low (${pct(a.team.confidence)}), so <b>send to a human</b> for manual triage.`;
+      if (urgent > 0.8 && sev >= 2.5) return `<b>Page the on-call ${team} engineer</b> (urgent ${pct(urgent)}, severity ${sev.toFixed(2)}/3)`;
+      return `Add to the <b>${team}</b> queue at priority P${Math.max(1, 4 - Math.round(sev))}`;
+    },
+  },
+  "Content moderation": {
+    examples: [
+      "This product is garbage and so is the idiot who designed it.",
+      "Congrats you WON a $1000 gift card!!! Claim now at bit.ly/fr33-gift before it expires",
+      "Does anyone know if the 2.4 release fixed the memory leak in the worker pool?",
+      "I'm going to find where you live and make you regret this review.",
+    ],
+    questions: {
+      allow: { type: "noul", instructions: "Is this comment safe to publish on a public community forum?" },
+      category: { type: "choice", instructions: "What best describes this comment?",
+        criteria: { normal: "On-topic, acceptable discussion", spam: "Advertising, scams, or link spam", harassment: "Insults or abuse aimed at a person", threat: "Threats of violence or harm" } },
+      toxicity: { type: "score", instructions: "How toxic is the language?", criteria: ["None", "Mild", "Moderate", "Severe"] },
+    },
+    action: (a) => {
+      const c = a.category?.choice, allow = a.allow?.noul ?? 0;
+      if (c === "threat") return `<b>Block the comment and escalate it to Trust &amp; Safety</b>`;
+      if (allow > 0.8) return `<b>Publish</b> (safe ${pct(allow)})`;
+      if (allow < 0.2) return `<b>Reject</b> as ${c}`;
+      return `<b>Hold for human review</b> (safe ${pct(allow)}, which is uncertain)`;
+    },
+  },
+  "Image check": {
+    examples: [
+      "A seller uploaded this photo for a new marketplace listing.",
+      "A user attached this image to a support ticket.",
+      "Profile picture uploaded during account signup.",
+    ],
+    questions: {
+      safe: { type: "noul", instructions: "Is the image safe for a general audience?" },
+      people: { type: "noul", instructions: "Does the image show one or more people?" },
+      subject: { type: "choice", instructions: "What is the main subject of the image?",
+        criteria: { product: "A physical product or object for sale", person: "A person or group of people", landscape: "Nature, outdoors, or scenery", screenshot: "A screenshot of software, a website, or a document", animal: "An animal or pet", other: "Something else" } },
+      quality: { type: "score", instructions: "How good is the photo quality for a listing?", criteria: ["Unusable", "Poor", "Acceptable", "Excellent"] },
+    },
+    action: (a) => {
+      if (!images.length) return `Add an image first. Without one, the model is judging only the text.`;
+      if ((a.safe?.noul ?? 1) < 0.5) return `<b>Reject the upload</b> (safe ${pct(a.safe.noul)})`;
+      if (a.subject?.choice === "screenshot") return `<b>Attach it to the ticket</b> as a screenshot and run OCR on it`;
+      if ((a.quality?.score ?? 3) < 1.5) return `<b>Ask the user for a better photo</b> (quality ${a.quality.score.toFixed(2)}/3)`;
+      return `<b>Accept the upload</b> as ${a.subject?.choice}`;
+    },
+  },
+  "Sales lead scoring": {
+    examples: [
+      "We're a 4,000-person bank evaluating Zero Trust vendors; procurement wants pricing for 3,500 seats by end of quarter.",
+      "Student here, just want to host my portfolio for free.",
+      "Our startup (12 people) is outgrowing our current CDN. Can someone walk us through Enterprise?",
+    ],
+    questions: {
+      qualified: { type: "noul", instructions: "Is this a sales-qualified lead with real buying intent?" },
+      segment: { type: "choice", instructions: "Which customer segment is this?",
+        criteria: { enterprise: "Large organization, 1000+ employees", midmarket: "Growing company, 50-1000 employees", smb: "Small business or startup", individual: "Hobbyist or student" } },
+      urgency: { type: "score", instructions: "How soon are they likely to buy?", criteria: ["Not buying", "Someday", "This year", "This quarter"] },
+    },
+    action: (a) => {
+      const q = a.qualified?.noul ?? 0, seg = a.segment?.choice;
+      if (q > 0.7 && seg === "enterprise") return `<b>Route to an enterprise AE today</b> (qualified ${pct(q)})`;
+      if (q > 0.5) return `<b>Assign to the ${seg} sales team</b>`;
+      return `<b>Add to the self-serve nurture sequence</b>`;
+    },
+  },
+};
+
+const $ = (id) => document.getElementById(id);
+const pct = (x) => (x * 100).toFixed(x > 0.995 || x < 0.005 ? 1 : 0) + "%";
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+let current = Object.keys(PRESETS)[0];
+let images = [];
+const spend = { usd: 0, neurons: 0, calls: 0 };
+const usd = (x) => "$" + (x < 0.01 ? x.toFixed(6) : x.toFixed(4)); // data URLs sent in the `images` field
+
+// Downscale in the browser so each image stays well under the 4 MiB / 16 MP limits.
+// Image tokens (and latency) grow quickly with resolution: 384px took ~4s, 1024px ~30s.
+function toDataUrl(file, maxSide = 512) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src);
+      resolve(c.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = () => reject(new Error(`Could not read ${file.name}`));
+    img.src = URL.createObjectURL(file);
+  });
+}
+async function addFiles(files) {
+  for (const f of [...files].filter((f) => /^image\/(png|jpeg|webp)$/.test(f.type))) {
+    if (images.length >= 4) break;
+    images.push(await toDataUrl(f));
+  }
+  renderThumbs();
+}
+function renderThumbs() {
+  $("thumbs").innerHTML = images.map((src, i) => `<div class="thumb"><img src="${src}" alt=""><span>${Math.round(src.length * 0.75 / 1024)} KB</span>
+    <button data-rm="${i}" title="Remove">×</button></div>`).join("");
+}
+$("thumbs").onclick = (e) => { if (e.target.dataset.rm) { images.splice(+e.target.dataset.rm, 1); renderThumbs(); } };
+$("drop").onclick = () => $("file").click();
+$("file").onchange = (e) => { addFiles(e.target.files); e.target.value = ""; };
+$("drop").ondragover = (e) => { e.preventDefault(); $("drop").classList.add("over"); };
+$("drop").ondragleave = () => $("drop").classList.remove("over");
+$("drop").ondrop = (e) => { e.preventDefault(); $("drop").classList.remove("over"); addFiles(e.dataTransfer.files); };
+document.addEventListener("paste", (e) => { const f = [...e.clipboardData.files]; if (f.length) { e.preventDefault(); addFiles(f); } });
+
+function loadPreset(name) {
+  current = name;
+  const p = PRESETS[name];
+  $("presets").innerHTML = Object.keys(PRESETS).map((n) => `<button class="chip ${n === name ? "on" : ""}" data-p="${esc(n)}">${esc(n)}</button>`).join("");
+  $("examples").innerHTML = p.examples.map((e, i) => `<button class="chip" data-e="${i}">Example ${i + 1}</button>`).join("");
+  $("state").value = p.examples[0];
+  $("questions").value = JSON.stringify(p.questions, null, 2);
+}
+$("presets").onclick = (e) => e.target.dataset.p && loadPreset(e.target.dataset.p);
+$("examples").onclick = (e) => { if (e.target.dataset.e) { $("state").value = PRESETS[current].examples[e.target.dataset.e]; run(); } };
+
+function bars(probs, legend, top) {
+  const entries = Object.entries(probs);
+  return entries.map(([k, v]) => `<div class="bar"><span class="name" title="${esc(legend?.[k] ?? k)}">${esc(legend?.[k] ?? k)}</span>
+    <div class="track"><div class="fill ${k === top ? "top" : ""}" style="width:${(v * 100).toFixed(1)}%"></div></div><span class="pct">${pct(v)}</span></div>`).join("");
+}
+
+function renderAnswer(id, a, q) {
+  let head = "", body = "";
+  if (a.type === "noul") {
+    head = `${pct(a.noul)} yes`;
+    body = bars({ yes: a.noul, no: 1 - a.noul }, null, a.noul >= 0.5 ? "yes" : "no");
+  } else if (a.type === "choice") {
+    head = `${esc(a.choice)} <span class="sub">conf ${pct(a.confidence)}</span>`;
+    body = bars(a.probabilities, null, a.choice);
+  } else if (a.type === "score") {
+    const top = Object.entries(a.probabilities).sort((x, y) => y[1] - x[1])[0][0];
+    head = `${a.score.toFixed(2)} / ${Object.keys(a.legend).length - 1} <span class="sub">conf ${pct(a.confidence)}</span>`;
+    body = bars(a.probabilities, a.legend, top);
+  } else body = `<pre>${esc(JSON.stringify(a, null, 2))}</pre>`;
+  return `<div class="q"><h3><span>${esc(id)} <span class="sub">${esc(a.type)}</span></span><span class="ans">${head}</span></h3>
+    <div class="sub" style="margin-bottom:6px">${esc(q?.instructions ?? "")}</div>${body}</div>`;
+}
+
+async function run() {
+  let questions;
+  try { questions = JSON.parse($("questions").value); }
+  catch (e) { $("results").innerHTML = `<div class="panel err" style="grid-column:1/-1">Questions JSON is invalid: ${esc(e.message)}</div>`; return; }
+  const models = [$("m-clef").checked && "clef", $("m-flash").checked && "clef-flash"].filter(Boolean);
+  if (!models.length) return;
+  const btn = $("run"); btn.disabled = true; btn.textContent = "Deciding…";
+  try {
+    const res = await fetch("/api/decide", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ models, state: $("state").value, questions, images }) });
+    const data = await res.json();
+    const presetMatches = JSON.stringify(questions) === JSON.stringify(PRESETS[current].questions);
+    $("results").innerHTML = data.runs.map((r) => {
+      if (r.error) return `<div class="panel model"><h2>${esc(r.model)}<span class="ms">${r.ms} ms</span></h2><div class="err">${esc(r.error)}</div></div>`;
+      const ans = r.result.answers;
+      spend.usd += r.cost.usd; spend.neurons += r.cost.neurons; spend.calls++;
+      let action = "";
+      if (presetMatches) { try { action = `<div class="action">→ ${PRESETS[current].action(ans)}</div>`; } catch {} }
+      return `<div class="panel model"><h2>${esc(r.model)}<span class="ms">${r.ms} ms</span></h2>
+        <div class="sub">${r.result.usage?.input_tokens ?? "?"} input tokens · <b>${usd(r.cost.usd)}</b> (${r.cost.neurons.toFixed(2)} neurons) · ≈ ${usd(r.cost.usd * 1e6)} per million calls like this</div>
+        ${Object.entries(ans).map(([id, a]) => renderAnswer(id, a, questions[id])).join("")}${action}</div>`;
+    }).join("");
+    $("spend").textContent = `Session spend: ${usd(spend.usd)} · ${spend.neurons.toFixed(1)} neurons · ${spend.calls} requests (list price, before the 10,000 free neurons/day)`;
+    $("raw").textContent = JSON.stringify(data, null, 2).replace(/data:image\/[^"]{60,}/g, (m) => m.slice(0, 40) + "…"); $("rawWrap").hidden = false;
+  } catch (e) {
+    $("results").innerHTML = `<div class="panel err" style="grid-column:1/-1">${esc(e.message)}</div>`;
+  } finally { btn.disabled = false; btn.textContent = "Decide"; }
+}
+$("run").onclick = run;
+document.addEventListener("keydown", (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") run(); });
+loadPreset(current);
+</script>
+</body>
+</html>
