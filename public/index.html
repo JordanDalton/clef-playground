@@ -36,8 +36,7 @@
   button.run { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 10px 20px; font-weight: 600; cursor: pointer; font-size: 15px; }
   button.run:disabled { opacity: .6; cursor: wait; }
   .check { display: flex; gap: 6px; align-items: center; font-size: 14px; }
-  .results { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  @media (max-width: 640px) { .results { grid-template-columns: 1fr; } }
+  .results { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
   .model h2 { margin: 0; font-size: 17px; display: flex; justify-content: space-between; align-items: baseline; }
   .ms { font: 600 13px ui-monospace, Menlo, monospace; color: var(--good); }
   .sub { color: var(--muted); font-size: 12px; }
@@ -58,7 +57,12 @@
   .drop.over { border-color: var(--accent); color: var(--accent); }
   .thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
   .thumb { position: relative; width: 84px; height: 84px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); }
-  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb img, .thumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb.audio { width: 220px; display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 8px 8px 18px; background: var(--code); }
+  .thumb.audio audio { width: 100%; height: 32px; }
+  .thumb.audio .fname { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 24px; }
+  .thumb.video { width: 150px; }
+  .skip { color: var(--muted); font-size: 13px; margin-top: 10px; }
   .thumb button { position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border-radius: 50%; border: 0; background: rgba(0,0,0,.65); color: #fff; cursor: pointer; font-size: 13px; line-height: 22px; padding: 0; }
   .thumb span { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,.55); color: #fff; font-size: 10px; padding: 1px 4px; }
   details { margin-top: 14px; } summary { cursor: pointer; color: var(--muted); font-size: 13px; }
@@ -80,9 +84,10 @@
     <textarea id="state"></textarea>
     <div class="examples" id="examples"></div>
 
-    <label>Images (optional, up to 4, placed before the state)</label>
-    <div class="drop" id="drop" tabindex="0">Drop, paste, or <u>choose</u> PNG / JPEG / WebP images
-      <input type="file" id="file" accept="image/png,image/jpeg,image/webp" multiple hidden></div>
+    <label>Media (optional, placed before the state)</label>
+    <div class="drop" id="drop" tabindex="0">Drop, paste, or <u>choose</u> images (PNG / JPEG / WebP), audio (WAV / MP3), or video (MP4 / WebM)
+      <div class="sub">Audio and video need <b>clef-omni</b>. Up to 4 files of each kind. Limits: 8 MB per audio clip, 16 MB per video clip, about 20 MB of media in total.</div>
+      <input type="file" id="file" accept="image/png,image/jpeg,image/webp,audio/wav,audio/x-wav,audio/mpeg,video/mp4,video/webm" multiple hidden></div>
     <div class="thumbs" id="thumbs"></div>
 
     <label for="questions">Questions (JSON schema)</label>
@@ -92,6 +97,7 @@
       <button class="run" id="run">Decide</button>
       <span class="check"><input type="checkbox" id="m-clef" checked><label for="m-clef" style="all:unset">clef</label></span>
       <span class="check"><input type="checkbox" id="m-flash" checked><label for="m-flash" style="all:unset">clef-flash</label></span>
+      <span class="check"><input type="checkbox" id="m-omni" checked><label for="m-omni" style="all:unset">clef-omni</label></span>
       <span class="sub">⌘/Ctrl + Enter</span>
     </div>
   </section>
@@ -166,6 +172,27 @@ const PRESETS = {
       return `<b>Accept the upload</b> as ${a.subject?.choice}`;
     },
   },
+  "Call & video review": {
+    examples: [
+      "Recording of an inbound call to the support line.",
+      "A user uploaded this clip to a public video feed.",
+      "Voicemail left on the sales line after hours.",
+    ],
+    questions: {
+      speech: { type: "noul", instructions: "Does the recording contain someone speaking?" },
+      upset: { type: "noul", instructions: "Does the speaker sound upset, angry, or distressed?" },
+      safe: { type: "noul", instructions: "Is the audio and video safe for a general audience?" },
+      content: { type: "choice", instructions: "What best describes the recording?",
+        criteria: { conversation: "People talking", music: "Music or singing", noise: "Silence, background noise, or no clear content", other: "Something else" } },
+    },
+    action: (a) => {
+      if (!audio.length && !videos.length) return `Add an audio or video file first. Without one, the model is judging only the text.`;
+      if ((a.safe?.noul ?? 1) < 0.5) return `<b>Take the clip down</b> (safe ${pct(a.safe.noul)})`;
+      if (a.content?.choice === "noise") return `<b>Discard</b>: nothing useful in the recording`;
+      if ((a.upset?.noul ?? 0) > 0.7) return `<b>Call the customer back today</b> (upset ${pct(a.upset.noul)})`;
+      return `<b>Transcribe and file it</b> as ${a.content?.choice}`;
+    },
+  },
   "Sales lead scoring": {
     examples: [
       "We're a 4,000-person bank evaluating Zero Trust vendors; procurement wants pricing for 3,500 seats by end of quarter.",
@@ -191,7 +218,12 @@ const $ = (id) => document.getElementById(id);
 const pct = (x) => (x * 100).toFixed(x > 0.995 || x < 0.005 ? 1 : 0) + "%";
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 let current = Object.keys(PRESETS)[0];
-let images = [];
+let images = [], audio = [], videos = [];
+// clef-omni rejects audio clips over 8 MiB and video clips over 16 MiB. Separately, the whole
+// request body has a byte limit: ~27 MB of JSON passed and ~35 MB failed, so we keep the base64 total under 27 MB.
+const MAX_BYTES = { audio: 8 * 1024 * 1024, videos: 16 * 1024 * 1024 };
+const MAX_TOTAL_B64 = 27e6;
+const mediaB64 = () => [...images, ...audio.map((a) => a.src), ...videos.map((v) => v.src)].reduce((n, s) => n + s.length, 0);
 const spend = { usd: 0, neurons: 0, calls: 0 };
 const usd = (x) => "$" + (x < 0.01 ? x.toFixed(6) : x.toFixed(4)); // data URLs sent in the `images` field
 
@@ -212,18 +244,40 @@ function toDataUrl(file, maxSide = 512) {
     img.src = URL.createObjectURL(file);
   });
 }
+// Audio and video are sent as-is; the browser has no cheap way to shrink them.
+function readDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result.replace(/^data:audio\/(x-wav|wave);/, "data:audio/wav;"));
+    r.onerror = () => reject(new Error(`Could not read ${file.name}`));
+    r.readAsDataURL(file);
+  });
+}
 async function addFiles(files) {
-  for (const f of [...files].filter((f) => /^image\/(png|jpeg|webp)$/.test(f.type))) {
-    if (images.length >= 4) break;
-    images.push(await toDataUrl(f));
+  for (const f of [...files]) {
+    if (/^image\/(png|jpeg|webp)$/.test(f.type)) { if (images.length < 4) images.push(await toDataUrl(f)); continue; }
+    const list = /^audio\/(wav|x-wav|wave|mpeg|mp3)$/.test(f.type) ? audio : /^video\/(mp4|webm)$/.test(f.type) ? videos : null;
+    if (!list || list.length >= 4) continue;
+    const kind = list === audio ? "audio" : "videos", mb = (n) => (n / 1048576).toFixed(1) + " MB";
+    if (f.size > MAX_BYTES[kind]) { alertBox(`${f.name} is ${mb(f.size)}. clef-omni accepts ${kind === "audio" ? "audio clips up to 8 MB" : "video clips up to 16 MB"}.`); continue; }
+    if (mediaB64() + f.size * 4 / 3 > MAX_TOTAL_B64) { alertBox(`Adding ${f.name} (${mb(f.size)}) would push the request over the API's size limit (about 20 MB of media in total). Remove a file first.`); continue; }
+    list.push({ src: await readDataUrl(f), name: f.name });
   }
   renderThumbs();
 }
+function alertBox(msg) { $("results").innerHTML = `<div class="panel err" style="grid-column:1/-1">${esc(msg)}</div>`; }
+const kb = (src) => Math.round(src.length * 0.75 / 1024) + " KB";
+const rm = (kind, i) => `<button data-rm="${i}" data-kind="${kind}" title="Remove">×</button>`;
 function renderThumbs() {
-  $("thumbs").innerHTML = images.map((src, i) => `<div class="thumb"><img src="${src}" alt=""><span>${Math.round(src.length * 0.75 / 1024)} KB</span>
-    <button data-rm="${i}" title="Remove">×</button></div>`).join("");
+  $("thumbs").innerHTML =
+    images.map((src, i) => `<div class="thumb"><img src="${src}" alt=""><span>${kb(src)}</span>${rm("images", i)}</div>`).join("") +
+    videos.map((v, i) => `<div class="thumb video"><video src="${v.src}" muted playsinline preload="metadata" title="${esc(v.name)}"></video><span>${kb(v.src)}</span>${rm("videos", i)}</div>`).join("") +
+    audio.map((a, i) => `<div class="thumb audio"><div class="fname" title="${esc(a.name)}">${esc(a.name)}</div><audio src="${a.src}" controls preload="metadata"></audio><span>${kb(a.src)}</span>${rm("audio", i)}</div>`).join("");
 }
-$("thumbs").onclick = (e) => { if (e.target.dataset.rm) { images.splice(+e.target.dataset.rm, 1); renderThumbs(); } };
+$("thumbs").onclick = (e) => {
+  const { rm: idx, kind } = e.target.dataset;
+  if (idx) { ({ images, audio, videos })[kind].splice(+idx, 1); renderThumbs(); }
+};
 $("drop").onclick = () => $("file").click();
 $("file").onchange = (e) => { addFiles(e.target.files); e.target.value = ""; };
 $("drop").ondragover = (e) => { e.preventDefault(); $("drop").classList.add("over"); };
@@ -269,15 +323,17 @@ async function run() {
   let questions;
   try { questions = JSON.parse($("questions").value); }
   catch (e) { $("results").innerHTML = `<div class="panel err" style="grid-column:1/-1">Questions JSON is invalid: ${esc(e.message)}</div>`; return; }
-  const models = [$("m-clef").checked && "clef", $("m-flash").checked && "clef-flash"].filter(Boolean);
+  const models = [$("m-clef").checked && "clef", $("m-flash").checked && "clef-flash", $("m-omni").checked && "clef-omni"].filter(Boolean);
   if (!models.length) return;
   const btn = $("run"); btn.disabled = true; btn.textContent = "Deciding…";
   try {
     const res = await fetch("/api/decide", { method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ models, state: $("state").value, questions, images }) });
+      body: JSON.stringify({ models, state: $("state").value, questions, images,
+        audio: audio.map((a) => a.src), videos: videos.map((v) => v.src) }) });
     const data = await res.json();
     const presetMatches = JSON.stringify(questions) === JSON.stringify(PRESETS[current].questions);
     $("results").innerHTML = data.runs.map((r) => {
+      if (r.skipped) return `<div class="panel model"><h2>${esc(r.model)}</h2><div class="skip">${esc(r.skipped)}</div></div>`;
       if (r.error) return `<div class="panel model"><h2>${esc(r.model)}<span class="ms">${r.ms} ms</span></h2><div class="err">${esc(r.error)}</div></div>`;
       const ans = r.result.answers;
       spend.usd += r.cost.usd; spend.neurons += r.cost.neurons; spend.calls++;
@@ -288,7 +344,7 @@ async function run() {
         ${Object.entries(ans).map(([id, a]) => renderAnswer(id, a, questions[id])).join("")}${action}</div>`;
     }).join("");
     $("spend").textContent = `Session spend: ${usd(spend.usd)} · ${spend.neurons.toFixed(1)} neurons · ${spend.calls} requests (list price, before the 10,000 free neurons/day)`;
-    $("raw").textContent = JSON.stringify(data, null, 2).replace(/data:image\/[^"]{60,}/g, (m) => m.slice(0, 40) + "…"); $("rawWrap").hidden = false;
+    $("raw").textContent = JSON.stringify(data, null, 2).replace(/data:(image|audio|video)\/[^"]{60,}/g, (m) => m.slice(0, 40) + "…"); $("rawWrap").hidden = false;
   } catch (e) {
     $("results").innerHTML = `<div class="panel err" style="grid-column:1/-1">${esc(e.message)}</div>`;
   } finally { btn.disabled = false; btn.textContent = "Decide"; }
